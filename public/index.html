@@ -263,7 +263,7 @@
 						<input type="text" name="titulo" placeholder="Lic. en Psicología">
 					</label>
 					<label class="campo">
-						<span>CUIT</span>
+						<span>CUIT <small>(si lo cambiás, se quita el certificado)</small></span>
 						<input type="text" name="cuit" inputmode="numeric" placeholder="20-12345678-9">
 					</label>
 					<label class="campo">
@@ -281,7 +281,7 @@
 						<input type="text" name="iibb" placeholder="Igual al CUIT">
 					</label>
 					<label class="campo">
-						<span>Punto de venta</span>
+						<span>Punto de venta <small>(de Web Services)</small></span>
 						<input type="text" name="punto_venta" inputmode="numeric">
 					</label>
 				</div>
@@ -315,7 +315,7 @@
 					<span class="num">2</span>
 					<div>
 						<b>Subilo en ARCA</b>
-						<p>En arca.gob.ar, con clave fiscal: <i>Administración de Certificados Digitales</i> → agregá un alias y subí el .csr. Descargá el certificado que te da. Después, en <i>Administrador de Relaciones</i>, autorizá ese alias para <i>Facturación Electrónica</i>. Creá también un punto de venta tipo <i>Web Services</i> y cargalo arriba.</p>
+						<p>En arca.gob.ar, con clave fiscal: <i>Administración de Certificados Digitales</i> → agregá un alias y subí el .csr. Descargá el certificado que te da. Después, en <i>Administrador de Relaciones</i>, autorizá ese alias para <i>Facturación Electrónica</i>. Creá también un punto de venta para <i>Web Services</i> (más abajo te explicamos cómo) y cargá su número en <i>Datos para la factura</i>.</p>
 					</div>
 				</li>
 				<li id="paso-certificado">
@@ -331,6 +331,55 @@
 				</li>
 			</ol>
 			<p class="estado-form" id="estado-arca" role="status" hidden></p>
+
+			<div class="guia-arca">
+				<h3>Para que ARCA no rechace tus facturas</h3>
+				<p class="nota">Una vez que la conexión funciona, casi no hay que tocar nada. Tocá cada punto para ver el detalle.</p>
+
+				<details>
+					<summary>El punto de venta tiene que ser de «Web Services»</summary>
+					<p>ARCA tiene distintos tipos de punto de venta. Esta app solo puede usar uno creado para <b>Web Services</b>. Los de «Factura en línea», que se usan para facturar desde la página de ARCA, <b>no sirven</b>.</p>
+					<p><b>Cómo crearlo:</b> en arca.gob.ar, con tu clave fiscal, entrá a <i>Administración de puntos de venta y domicilios</i> → <i>A/B/M de puntos de venta</i> → <i>Agregar</i>. Elegí un número que no estés usando y, en sistema, <i>Factura Electrónica - Monotributo - Web Services</i>. Después cargá ese número en <i>Datos para la factura</i>.</p>
+					<p><b>Usalo solo para esta app.</b> Si también facturás desde la página de ARCA u otro programa, hacelo con otro punto de venta: si dos sistemas usan el mismo, los números de factura se pisan y ARCA rechaza las que lleguen tarde.</p>
+					<p>Una vez que empezaste a facturar, no cambies el número salvo que pases a otro punto de venta que también sea de Web Services.</p>
+				</details>
+
+				<details>
+					<summary>El CUIT y el certificado van juntos</summary>
+					<p>El certificado que te da ARCA sirve para un solo CUIT. Si cambiás el CUIT en <i>Datos para la factura</i>, la app te pide confirmación y quita el certificado: vas a tener que repetir los pasos 1, 2 y 3 con el CUIT nuevo.</p>
+				</details>
+
+				<details>
+					<summary>No generes un pedido nuevo si no hace falta</summary>
+					<p>El botón <i>Generar uno nuevo</i> crea una clave nueva. Al tocarlo, el certificado que tenés cargado deja de servir y no vas a poder facturar hasta subir uno nuevo. Usalo solo para renovar el certificado o si ARCA te lo pide.</p>
+				</details>
+
+				<details>
+					<summary>No borres nada en ARCA</summary>
+					<p>En ARCA, el alias del certificado tiene que seguir autorizado para <i>Facturación Electrónica</i> en el <i>Administrador de Relaciones de Clave Fiscal</i>. Si borrás esa relación, revocás el certificado o eliminás el alias, la app deja de poder facturar.</p>
+				</details>
+
+				<details>
+					<summary>El certificado vence cada 2 años</summary>
+					<p>La fecha de vencimiento aparece arriba, en el paso 3. Desde 30 días antes, la app te avisa en la pantalla principal. Una vez vencido, no se puede facturar hasta renovarlo.</p>
+					<p><b>Cómo renovarlo:</b> tocá <i>Generar uno nuevo</i> en el paso 1 y descargá el pedido. En ARCA, en <i>Administración de Certificados Digitales</i>, entrá al <b>mismo alias</b> que usaste la primera vez y agregale el pedido nuevo: así no hace falta volver a autorizarlo. Descargá el certificado y subilo en el paso 3. Hacelo cuando no tengas una tanda por emitir, porque entre el paso 1 y el 3 no se puede facturar.</p>
+				</details>
+
+				<details>
+					<summary>Factura C es solo para monotributistas</summary>
+					<p>La app emite Factura C, que corresponde al monotributo. Si pasás a ser Responsable Inscripto, ARCA va a rechazar las facturas: consultá con tu contador antes de seguir usándola.</p>
+				</details>
+
+				<details>
+					<summary>Las fechas de las facturas</summary>
+					<p>ARCA acepta facturas de servicios con fecha de hasta 10 días antes o después de hoy, y nunca anterior a la última factura emitida en el mismo punto de venta. La app lo controla antes de emitir y te avisa qué fecha podés usar.</p>
+				</details>
+
+				<details>
+					<summary>Lo que podés cambiar sin problema</summary>
+					<p>Tu nombre, título, domicilio, Ingresos Brutos, inicio de actividades y el concepto de la factura. ARCA no los controla: solo salen impresos en el PDF. Igual tienen que coincidir con tus datos fiscales reales.</p>
+				</details>
+			</div>
 		</section>
 
 		<section class="bloque panel" data-panel="whatsapp" hidden>

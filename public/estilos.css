@@ -714,3 +714,15 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 	.entrada .sheet.chica { margin-top: 0; }
 	.documento .volver-cuenta { margin-bottom: 4px; }
 }
+
+.guia-arca { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); }
+.guia-arca h3 { font-size: 17px; font-weight: 600; }
+.guia-arca details { border-top: 1px solid var(--line); }
+.guia-arca details:first-of-type { margin-top: 14px; }
+.guia-arca summary { cursor: pointer; padding: 13px 0; font-weight: 500; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.guia-arca summary::-webkit-details-marker { display: none; }
+.guia-arca summary::after { content: '›'; color: var(--muted); transition: transform .2s var(--ease); }
+.guia-arca details[open] summary::after { transform: rotate(90deg); }
+.guia-arca summary:hover { color: var(--rose-deep); }
+.guia-arca details p { font-size: 14.5px; color: var(--ink-soft); line-height: 1.55; margin-bottom: 10px; }
+.guia-arca details p:last-child { margin-bottom: 14px; }

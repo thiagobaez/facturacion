@@ -1,0 +1,1 @@
+ALTER TABLE facturas ADD COLUMN enlace_version INTEGER NOT NULL DEFAULT 0;

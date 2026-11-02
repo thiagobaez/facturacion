@@ -3,7 +3,7 @@
   "name": "facturacion",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  "observability": { "enabled": true },
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } },
   "assets": {
     "directory": "public",
     "binding": "ASSETS",
@@ -21,7 +21,7 @@
   "r2_buckets": [
     {
       "binding": "ARCHIVOS",
-      "bucket_name": "facturacion-archivos"
+      "bucket_name": "facturacion-pdfs"
     }
   ],
   "vars": {

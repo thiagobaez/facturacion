@@ -3,7 +3,9 @@ import { pbkdf2Sync, randomBytes } from "node:crypto"
 import { createInterface } from "node:readline"
 import { Writable } from "node:stream"
 
-const ITERACIONES = 100_000
+// Igual que src/auth.ts: rondas encadenadas de 100.000, el máximo que acepta Workers por llamada.
+const ITERACIONES = 600_000
+const RONDA = 100_000
 const [, , comando, nombre, ...resto] = process.argv
 const remoto = resto.includes("--remoto")
 
@@ -24,7 +26,10 @@ function base64url(buffer) {
 
 function hashear(clave) {
   const sal = randomBytes(16)
-  const resumen = pbkdf2Sync(clave, sal, ITERACIONES, 32, "sha256")
+  let resumen = Buffer.from(clave, "utf8")
+  for (let restantes = ITERACIONES; restantes > 0; restantes -= RONDA) {
+    resumen = pbkdf2Sync(resumen, sal, Math.min(restantes, RONDA), 32, "sha256")
+  }
   return `pbkdf2:${ITERACIONES}:${base64url(sal)}:${base64url(resumen)}`
 }
 
@@ -120,13 +125,13 @@ if (comando === "lista") {
   for (const f of facturas) {
     execFileSync(
       "npx",
-      ["wrangler", "r2", "object", "delete", `facturacion-archivos/u/${id}/facturas/${f.id}.pdf`, remoto ? "--remote" : "--local"],
+      ["wrangler", "r2", "object", "delete", `facturacion-pdfs/u/${id}/facturas/${f.id}.pdf`, remoto ? "--remote" : "--local"],
       { stdio: "ignore" },
     )
   }
   ejecutar(
     `DELETE FROM sesiones WHERE usuario_id = ${id}; DELETE FROM tickets WHERE usuario_id = ${id}; ` +
-      `DELETE FROM candados WHERE usuario_id = ${id}; DELETE FROM pacientes WHERE usuario_id = ${id}; ` +
+      `DELETE FROM candados WHERE usuario_id = ${id}; DELETE FROM pendientes WHERE usuario_id = ${id}; DELETE FROM pacientes WHERE usuario_id = ${id}; ` +
       `DELETE FROM facturas WHERE usuario_id = ${id}; DELETE FROM usuarios WHERE id = ${id};`,
   )
   console.log(`Cuenta borrada, con sus ${facturas.length} PDF.`)

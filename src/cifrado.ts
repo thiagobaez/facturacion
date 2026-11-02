@@ -26,3 +26,19 @@ export async function descifrar(secreto: string, guardado: string): Promise<stri
   const plano = await crypto.subtle.decrypt({ name: "AES-GCM", iv: deBase64(iv) }, await llave(secreto), deBase64(datos))
   return new TextDecoder().decode(plano)
 }
+
+export function secretos(env: { SECRETO_DATOS: string; SECRETO_DATOS_ANTERIOR?: string }): string[] {
+  return env.SECRETO_DATOS_ANTERIOR ? [env.SECRETO_DATOS, env.SECRETO_DATOS_ANTERIOR] : [env.SECRETO_DATOS]
+}
+
+export async function descifrarConCualquiera(lista: string[], guardado: string): Promise<{ texto: string; conActual: boolean }> {
+  let error: unknown
+  for (const [i, secreto] of lista.entries()) {
+    try {
+      return { texto: await descifrar(secreto, guardado), conActual: i === 0 }
+    } catch (e) {
+      error = e
+    }
+  }
+  throw error
+}

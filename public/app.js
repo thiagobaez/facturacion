@@ -32,7 +32,7 @@ async function api(url, opciones = {}) {
 		throw new Error('Tu sesión terminó. Volvé a ingresar.');
 	}
 	const datos = await r.json().catch(() => null);
-	if (!r.ok) throw new Error(datos?.detail || 'Algo salió mal. Probá de nuevo.');
+	if (!r.ok) throw Object.assign(new Error(datos?.detail || 'Algo salió mal. Probá de nuevo.'), { estado: r.status, datos });
 	return datos;
 }
 
@@ -455,7 +455,10 @@ async function emitir() {
 	}
 }
 
-function mostrarResultado({ lote: id, aprobadas, resultados }) {
+function mostrarResultado({ lote: id, aprobadas, recuperadas, resultados }) {
+	if (recuperadas) {
+		alert(`${recuperadas === 1 ? 'Una factura de una tanda anterior había quedado' : `${recuperadas} facturas de una tanda anterior habían quedado`} sin guardar porque se cortó la conexión. ARCA ${recuperadas === 1 ? 'la había emitido: ya está' : 'las había emitido: ya están'} en el historial.`);
+	}
 	fallidas = resultados.filter(r => !r.ok);
 	const total = resultados.length;
 	$('#resultado-titular').textContent = !fallidas.length
@@ -505,6 +508,7 @@ function lineaEnvio(d) {
 	} else {
 		contenido = `<span>Sin teléfono</span><button type="button" class="enlace copiar-enlace" data-id="${d.id}">Copiar enlace de la factura</button>`;
 	}
+	contenido += `<button type="button" class="enlace anular-enlace" data-id="${d.id}">Anular enlace</button>`;
 	return `<span class="linea-envio" data-id="${d.id}">${contenido}</span>`;
 }
 
@@ -515,6 +519,22 @@ document.addEventListener('click', async e => {
 		const d = { ...datosEnvio.get(id), estado: 'abierto' };
 		setTimeout(() => { boton.closest('.linea-envio').outerHTML = lineaEnvio(d); }, 300);
 		api(`/api/facturas/${id}/whatsapp`, { method: 'POST' }).catch(() => {});
+		return;
+	}
+	const anular = e.target.closest('.anular-enlace');
+	if (anular) {
+		const id = anular.dataset.id;
+		if (!confirm('¿Anular el enlace de esta factura? Quien ya lo tenga no va a poder abrirla. Si después la volvés a mandar, sale con un enlace nuevo.')) return;
+		try {
+			const { enlace } = await api(`/api/facturas/${id}/anular-enlace`, { method: 'POST' });
+			const d = { ...datosEnvio.get(id), enlace };
+			const enHistorial = historial.find(f => String(f.id) === id);
+			if (enHistorial) enHistorial.enlace = enlace;
+			anular.closest('.linea-envio').outerHTML = lineaEnvio(d);
+			alert('Listo: el enlace anterior ya no funciona.');
+		} catch (error) {
+			alert(error.message);
+		}
 		return;
 	}
 	const copiar = e.target.closest('.copiar-enlace');
@@ -804,7 +824,18 @@ formDatos.addEventListener('submit', async e => {
 			punto_venta: parseInt(formDatos.punto_venta.value, 10), precio_sesion: leerPrecio(formDatos.precio_sesion.value).toFixed(2),
 			descripcion: formDatos.descripcion.value,
 		};
-		aplicarCuenta({ ...cuenta, ...(await api('/api/cuenta', { method: 'PUT', body: JSON.stringify(datos) })) });
+		let guardada;
+		try {
+			guardada = await api('/api/cuenta', { method: 'PUT', body: JSON.stringify(datos) });
+		} catch (err) {
+			if (err.datos?.confirmar !== 'quitar_certificado') throw err;
+			if (!confirm(`${err.message}\n\n¿Cambiar el CUIT y quitar el certificado?`)) {
+				estado(formDatos, 'No se guardaron los cambios.');
+				return;
+			}
+			guardada = await api('/api/cuenta', { method: 'PUT', body: JSON.stringify({ ...datos, quitar_certificado: true }) });
+		}
+		aplicarCuenta({ ...cuenta, ...guardada });
 		pintarCuenta();
 		estado(formDatos, 'Datos guardados.', true);
 		if (!leerBorrador()?.precio && +cuenta.precio_sesion) tanda.precio = (+cuenta.precio_sesion).toLocaleString('es-AR');
@@ -916,8 +947,15 @@ async function iniciar() {
 			periodo: b.periodo || tanda.periodo, desde: b.desde || '', hasta: b.hasta || '',
 			precio: b.precio || '', vto: b.vto && b.vto >= tanda.fecha ? b.vto : tanda.fecha, descripcion: b.descripcion || '',
 		});
-		tanda.sel = new Map((b.sel || []).map(i => [String(i.dni), i]));
-		tanda.extras = new Map((b.extras || []).map(i => [String(i.dni), i]));
+		// El borrador sale de localStorage: se normaliza antes de usarlo en el HTML.
+		const limpio = i => ({
+			dni: String(i?.dni ?? '').replace(/\D/g, ''),
+			nombre: String(i?.nombre ?? ''),
+			sesiones: Math.min(100, Math.max(1, parseInt(i?.sesiones, 10) || 1)),
+		});
+		const lista = l => (Array.isArray(l) ? l : []).map(limpio).filter(i => i.dni);
+		tanda.sel = new Map(lista(b.sel).map(i => [i.dni, i]));
+		tanda.extras = new Map(lista(b.extras).map(({ dni, nombre }) => [dni, { dni, nombre }]));
 	}
 	if (!tanda.precio && +datos.precio_sesion) tanda.precio = (+datos.precio_sesion).toLocaleString('es-AR');
 	if (!tanda.descripcion) tanda.descripcion = datos.descripcion || 'Sesión de psicoterapia';

@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest"
-import { hashearClave, verificarClave } from "../src/auth"
-import { cifrar, descifrar } from "../src/cifrado"
+import { esDispositivoConocido, hashearClave, limitesLogin, marcaDispositivo, necesitaRehash, redDe, verificarClave } from "../src/auth"
+import { cifrar, descifrar, descifrarConCualquiera } from "../src/cifrado"
 import { describirPeriodo } from "../src/facturador"
 import { apto, generarPdf, nombreArchivo, urlQr } from "../src/pdf"
 import { aCentavos, deBase64, deCentavos, pesos } from "../src/util"
 import * as validar from "../src/validacion"
 import { mostrarTelefono, normalizarTelefono, TelefonoInvalido } from "../src/whatsapp"
-import { enlacePublico, idDeEnlace } from "../src/enlaces"
+import { DURACION_ENLACE, enlacePublico, enlaceValido, leerEnlace } from "../src/enlaces"
+const SECRETO = "secreto-de-prueba-para-tests"
 
 const factura = {
   modo: "simulacion" as const,
@@ -45,6 +46,25 @@ describe("contraseñas y cifrado", () => {
     expect(await verificarClave("una clave larga", hash)).toBe(true)
     expect(await verificarClave("otra", hash)).toBe(false)
     expect(await verificarClave("x", "basura")).toBe(false)
+    expect(hash).toMatch(/^pbkdf2:600000:/)
+    expect(necesitaRehash(hash)).toBe(false)
+  })
+
+  it("sigue aceptando los hashes viejos de 100.000 iteraciones y pide actualizarlos", async () => {
+    const { pbkdf2Sync } = await import("node:crypto")
+    const sal = Buffer.alloc(16, 7)
+    const b64 = (b: Buffer) => b.toString("base64url")
+    const viejo = `pbkdf2:100000:${b64(sal)}:${b64(pbkdf2Sync("una clave larga", sal, 100_000, 32, "sha256"))}`
+    expect(await verificarClave("una clave larga", viejo)).toBe(true)
+    expect(necesitaRehash(viejo)).toBe(true)
+  })
+
+  it("coincide con el hash del script de cuentas (rondas encadenadas)", async () => {
+    const { pbkdf2Sync } = await import("node:crypto")
+    const sal = Buffer.alloc(16, 3)
+    let r = Buffer.from("una clave larga")
+    for (let i = 0; i < 6; i++) r = pbkdf2Sync(r, sal, 100_000, 32, "sha256")
+    expect(await verificarClave("una clave larga", `pbkdf2:600000:${sal.toString("base64url")}:${r.toString("base64url")}`)).toBe(true)
   })
 
   it("cifra y descifra; con otro secreto no se puede leer", async () => {
@@ -52,6 +72,15 @@ describe("contraseñas y cifrado", () => {
     expect(guardado).not.toContain("clave privada")
     expect(await descifrar("secreto-de-prueba-123", guardado)).toBe("clave privada")
     await expect(descifrar("otro-secreto-de-prueba", guardado)).rejects.toThrow()
+  })
+
+  it("al rotar el secreto todavía lee lo cifrado con el anterior", async () => {
+    const guardado = await cifrar("secreto-viejo-de-prueba", "clave privada")
+    expect(await descifrarConCualquiera(["secreto-nuevo-de-prueba", "secreto-viejo-de-prueba"], guardado)).toEqual({
+      texto: "clave privada",
+      conActual: false,
+    })
+    await expect(descifrarConCualquiera(["secreto-nuevo-de-prueba"], guardado)).rejects.toThrow()
   })
 })
 
@@ -100,20 +129,50 @@ describe("teléfonos", () => {
 })
 
 describe("enlaces públicos de facturas", () => {
+  const secreto = "secreto-de-prueba-123"
+  const f41 = { id: 41, enlace_version: 0 }
+  const ahora = Date.parse("2026-11-01T12:00:00Z")
+  const abrir = async (enlace: string, f = f41, secretos = [secreto], momento = ahora) => {
+    const leido = leerEnlace(enlace.slice(3), momento)
+    return !!leido && (await enlaceValido(secretos, f, leido))
+  }
+
   it("el enlace abre solo la factura que corresponde", async () => {
-    const enlace = await enlacePublico("secreto-de-prueba-123", 41)
-    expect(enlace).toMatch(/^\/f\/41-[A-Za-z0-9_-]{22}$/)
-    const clave = enlace.slice(3)
-    expect(await idDeEnlace("secreto-de-prueba-123", clave)).toBe(41)
+    const enlace = await enlacePublico(secreto, f41, ahora)
+    expect(enlace).toMatch(/^\/f\/41-\d+-[A-Za-z0-9_-]{22}$/)
+    expect(await abrir(enlace)).toBe(true)
   })
 
   it("no se puede adivinar ni reusar para otra factura", async () => {
-    const clave = (await enlacePublico("secreto-de-prueba-123", 41)).slice(3)
-    const firma = clave.split("-").slice(1).join("-")
-    expect(await idDeEnlace("secreto-de-prueba-123", `42-${firma}`)).toBeNull()
-    expect(await idDeEnlace("otro-secreto-distinto", clave)).toBeNull()
-    expect(await idDeEnlace("secreto-de-prueba-123", "41-AAAAAAAAAAAAAAAAAAAAAA")).toBeNull()
-    expect(await idDeEnlace("secreto-de-prueba-123", "basura")).toBeNull()
+    const [, vence, firma] = (await enlacePublico(secreto, f41, ahora)).slice(3).split(/-(\d+)-/)
+    expect(await abrir(`/f/42-${vence}-${firma}`, { id: 42, enlace_version: 0 })).toBe(false)
+    expect(await abrir(await enlacePublico(secreto, f41, ahora), f41, ["otro-secreto-distinto"])).toBe(false)
+    expect(await abrir(`/f/41-${vence}-AAAAAAAAAAAAAAAAAAAAAA`)).toBe(false)
+    expect(leerEnlace("basura", ahora)).toBeNull()
+  })
+
+  it("no se puede estirar el vencimiento", async () => {
+    const [, vence, firma] = (await enlacePublico(secreto, f41, ahora)).slice(3).split(/-(\d+)-/)
+    expect(await abrir(`/f/41-${Number(vence) + 86_400}-${firma}`)).toBe(false)
+  })
+
+  it("vence a los 60 días", async () => {
+    const enlace = await enlacePublico(secreto, f41, ahora)
+    expect(await abrir(enlace, f41, [secreto], ahora + (DURACION_ENLACE - 60) * 1000)).toBe(true)
+    expect(await abrir(enlace, f41, [secreto], ahora + DURACION_ENLACE * 1000)).toBe(false)
+  })
+
+  it("al anularlo deja de andar y el nuevo sí anda", async () => {
+    const viejo = await enlacePublico(secreto, f41, ahora)
+    const anulada = { id: 41, enlace_version: 1 }
+    expect(await abrir(viejo, anulada)).toBe(false)
+    expect(await abrir(await enlacePublico(secreto, anulada, ahora), anulada)).toBe(true)
+  })
+
+  it("al rotar el secreto los enlaces viejos siguen andando", async () => {
+    const viejo = await enlacePublico("secreto-viejo-de-prueba", f41, ahora)
+    expect(await abrir(viejo, f41, [secreto, "secreto-viejo-de-prueba"])).toBe(true)
+    expect(await abrir(viejo, f41, [secreto])).toBe(false)
   })
 
   it("describe el período", () => {
@@ -153,5 +212,29 @@ describe("pdf", () => {
 
   it("nombre de archivo sin tildes", () => {
     expect(nombreArchivo({ pto_vta: 2, numero: 41, nombre: "Ana Pérez" })).toBe("Factura-C-00002-00000041-Ana-Perez.pdf")
+  })
+})
+
+describe("límite de intentos: redes y dispositivos", () => {
+  it("agrupa las IPv6 por /64 y deja las IPv4 como están", () => {
+    expect(redDe("203.0.113.7")).toBe("203.0.113.7")
+    expect(redDe("2001:db8:aa:bb:1:2:3:4")).toBe("2001:db8:aa:bb::/64")
+    expect(redDe("2001:DB8:aa:bb::9")).toBe("2001:db8:aa:bb::/64")
+    expect(redDe("2001:db8::1")).toBe("2001:db8:0:0::/64")
+    expect(redDe("::ffff:198.51.100.2")).toBe("198.51.100.2")
+  })
+
+  it("solo aplica el tope global por usuario a navegadores desconocidos", () => {
+    expect(limitesLogin("Ana", "1.2.3.4", false).map((l) => l.clave)).toEqual(["login:ana|ip:1.2.3.4", "ip:1.2.3.4", "login:ana"])
+    expect(limitesLogin("Ana", "1.2.3.4", true).map((l) => l.clave)).toEqual(["login:ana|ip:1.2.3.4", "ip:1.2.3.4"])
+  })
+
+  it("la cookie de dispositivo es por usuario y no se puede falsificar", async () => {
+    const marca = await marcaDispositivo(SECRETO, "Ana")
+    expect(await esDispositivoConocido([SECRETO], "ana", marca)).toBe(true)
+    expect(await esDispositivoConocido([SECRETO], "otro", marca)).toBe(false)
+    expect(await esDispositivoConocido(["otro-secreto-de-prueba-123"], "ana", marca)).toBe(false)
+    expect(await esDispositivoConocido([SECRETO], "ana", "A".repeat(22))).toBe(false)
+    expect(await esDispositivoConocido([SECRETO], "ana", undefined)).toBe(false)
   })
 })

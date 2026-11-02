@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono"
 import { deleteCookie, getCookie, setCookie } from "hono/cookie"
 import { zipSync } from "fflate"
 import * as auth from "./auth"
-import { cifrar } from "./cifrado"
+import { cifrar, secretos } from "./cifrado"
 import * as datos from "./datos"
 import {
   ErrorUsuario,
@@ -18,7 +18,7 @@ import { nombreArchivo } from "./pdf"
 import type { Env, Factura, Usuario } from "./tipos"
 import * as validar from "./validacion"
 import { MENSAJE_PREDETERMINADO, mostrarTelefono } from "./whatsapp"
-import { enlacePublico, idDeEnlace } from "./enlaces"
+import { enlacePublico, enlaceValido, leerEnlace } from "./enlaces"
 import { certificadoDesdeArchivo, generarClaveYPedido, leerCertificado } from "./arca/certificado"
 
 export const NOMBRE_APP = "Facturación"
@@ -26,25 +26,56 @@ export const NOMBRE_APP = "Facturación"
 type Variables = { usuario: Usuario; token: string }
 type Ctx = Context<{ Bindings: Env; Variables: Variables }>
 
+// Las mismas cabeceras (salvo Cache-Control) están en public/_headers para las pantallas estáticas.
 const CABECERAS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; " +
+    "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Cache-Control": "no-store",
+}
+
+function mismoOrigen(origen: string, url: string): boolean {
+  try {
+    return new URL(origen).host === new URL(url).host
+  } catch {
+    return false
+  }
 }
 
 function cookieSegura(c: Ctx): boolean {
   return c.env.COOKIE_SEGURA !== "false"
 }
 
-function ponerCookie(c: Ctx, token: string) {
-  setCookie(c, auth.COOKIE, token, {
+// En producción las cookies llevan el prefijo __Host-: el navegador las rechaza si no son Secure,
+// si tienen Domain o si no son de toda la app. En local (sin HTTPS) van sin prefijo.
+function prefijo(c: Ctx) {
+  return cookieSegura(c) ? ("host" as const) : undefined
+}
+
+function leerCookie(c: Ctx, nombre: string) {
+  return getCookie(c, nombre, prefijo(c))
+}
+
+function ponerCookie(c: Ctx, nombre: string, valor: string, segundos: number) {
+  setCookie(c, nombre, valor, {
     httpOnly: true,
     secure: cookieSegura(c),
     sameSite: "Strict",
     path: "/",
-    maxAge: auth.DURACION_SESION,
+    maxAge: segundos,
+    prefix: prefijo(c),
   })
+}
+
+function ipDe(c: Ctx) {
+  return c.req.header("CF-Connecting-IP") ?? "local"
 }
 
 function vistaPaciente(p: { dni: number; nombre: string; telefono: string | null; notas: string }) {
@@ -87,7 +118,7 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
 
   app.use("*", async (c, siguiente) => {
     const origen = c.req.header("Origin")
-    if (!["GET", "HEAD"].includes(c.req.method) && origen && new URL(origen).host !== new URL(c.req.url).host) {
+    if (!["GET", "HEAD"].includes(c.req.method) && origen && !mismoOrigen(origen, c.req.url)) {
       c.res = c.json({ detail: "Origen no permitido" }, 403)
     } else {
       await siguiente()
@@ -100,29 +131,31 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
     const usuario = typeof cuerpo.usuario === "string" ? cuerpo.usuario.slice(0, 80) : ""
     const clave = typeof cuerpo.clave === "string" ? cuerpo.clave.slice(0, 200) : ""
     if (!usuario || !clave) return c.json({ detail: "Completá usuario y contraseña." }, 422)
-    if (await auth.bloqueado(c.env.DB, usuario)) {
+    const conocido = await auth.esDispositivoConocido(secretos(c.env), usuario, leerCookie(c, auth.COOKIE_DISPOSITIVO))
+    const limites = auth.limitesLogin(usuario, ipDe(c), conocido)
+    if (!(await auth.registrarIntento(c.env.DB, limites))) {
       return c.json({ detail: "Demasiados intentos. Esperá unos minutos y probá de nuevo." }, 429)
     }
     const encontrado = await auth.buscarParaLogin(c.env.DB, usuario, clave)
-    if (!encontrado) {
-      await auth.registrarFallo(c.env.DB, usuario)
-      return c.json({ detail: "El usuario o la contraseña no son correctos." }, 401)
-    }
-    await auth.limpiarFallos(c.env.DB, usuario)
-    ponerCookie(c, await auth.crearSesion(c.env.DB, encontrado.id))
+    if (!encontrado) return c.json({ detail: "El usuario o la contraseña no son correctos." }, 401)
+    await auth.limpiarIntentos(c.env.DB, [limites[0].clave])
+    ponerCookie(c, auth.COOKIE, await auth.crearSesion(c.env.DB, encontrado.id), auth.DURACION_SESION)
+    ponerCookie(c, auth.COOKIE_DISPOSITIVO, await auth.marcaDispositivo(c.env.SECRETO_DATOS, usuario), auth.DURACION_DISPOSITIVO)
     return c.json({ ok: true })
   })
 
   app.post("/api/logout", async (c) => {
-    await auth.cerrarSesion(c.env.DB, getCookie(c, auth.COOKIE))
-    deleteCookie(c, auth.COOKIE, { path: "/", secure: cookieSegura(c) })
+    await auth.cerrarSesion(c.env.DB, leerCookie(c, auth.COOKIE))
+    deleteCookie(c, auth.COOKIE, { path: "/", secure: cookieSegura(c), prefix: prefijo(c) })
     return c.json({ ok: true })
   })
 
   app.get("/f/:clave", async (c) => {
-    const id = await idDeEnlace(c.env.SECRETO_DATOS, c.req.param("clave").replace(/\.pdf$/, ""))
-    const f = id ? await c.env.DB.prepare("SELECT * FROM facturas WHERE id = ?").bind(id).first<Factura>() : null
-    if (!f) return c.text("Este enlace no es válido.", 404)
+    const enlace = leerEnlace(c.req.param("clave").replace(/\.pdf$/, ""))
+    const f = enlace ? await c.env.DB.prepare("SELECT * FROM facturas WHERE id = ?").bind(enlace.id).first<Factura>() : null
+    if (!enlace || !f || !(await enlaceValido(secretos(c.env), f, enlace))) {
+      return c.text("Este enlace no es válido o ya venció. Pedile a quien te lo mandó uno nuevo.", 404)
+    }
     return new Response(await pdfDe(c.env, f), {
       headers: {
         "Content-Type": "application/pdf",
@@ -134,7 +167,7 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
   })
 
   app.use("*", async (c, siguiente) => {
-    const token = getCookie(c, auth.COOKIE)
+    const token = leerCookie(c, auth.COOKIE)
     const usuario = await auth.usuarioDeSesion(c.env.DB, token)
     if (!usuario) {
       if (c.req.path.startsWith("/api/")) return c.json({ detail: "Tenés que iniciar sesión" }, 401)
@@ -149,14 +182,33 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
 
   app.put("/api/cuenta", async (c) => {
     const u = c.get("usuario")
-    const d = validar.datosCuenta(await c.req.json().catch(() => null))
-    await c.env.DB.prepare(
-      "UPDATE usuarios SET nombre = ?, titulo = ?, cuit = ?, domicilio = ?, iibb = ?, inicio_actividades = ?, " +
-        "punto_venta = ?, precio_sesion = ?, descripcion = ? WHERE id = ?",
+    const cuerpo = await c.req.json().catch(() => null)
+    const d = validar.datosCuenta(cuerpo)
+    const cambiaCuit = d.cuit !== u.cuit
+    if (cambiaCuit && (u.certificado || u.pedido_certificado) && cuerpo?.quitar_certificado !== true) {
+      return c.json(
+        {
+          detail:
+            "El certificado de ARCA que cargaste es del CUIT anterior. Si cambiás el CUIT se va a quitar el certificado " +
+            "y vas a tener que generar uno nuevo para el CUIT nuevo.",
+          confirmar: "quitar_certificado",
+        },
+        409,
+      )
+    }
+    // Si el CUIT cambia, el certificado, la clave y el pedido se borran en la misma sentencia:
+    // nunca puede quedar un certificado de un CUIT cargado en una cuenta con otro.
+    const fila = await c.env.DB.prepare(
+      "UPDATE usuarios SET " +
+        "certificado = CASE WHEN cuit = ?1 THEN certificado END, clave_privada = CASE WHEN cuit = ?1 THEN clave_privada END, " +
+        "clave_publica = CASE WHEN cuit = ?1 THEN clave_publica END, pedido_certificado = CASE WHEN cuit = ?1 THEN pedido_certificado END, " +
+        "nombre = ?2, titulo = ?3, cuit = ?1, domicilio = ?4, iibb = ?5, inicio_actividades = ?6, " +
+        "punto_venta = ?7, precio_sesion = ?8, descripcion = ?9 WHERE id = ?10 RETURNING *",
     )
-      .bind(d.nombre, d.titulo, d.cuit, d.domicilio, d.iibb, d.inicio_actividades, d.punto_venta, d.precio_sesion, d.descripcion, u.id)
-      .run()
-    return c.json(vistaCuenta(c.env, { ...u, ...d }))
+      .bind(d.cuit, d.nombre, d.titulo, d.domicilio, d.iibb, d.inicio_actividades, d.punto_venta, d.precio_sesion, d.descripcion, u.id)
+      .first<Usuario>()
+    if (cambiaCuit) await c.env.DB.prepare("DELETE FROM tickets WHERE usuario_id = ?").bind(u.id).run()
+    return c.json(vistaCuenta(c.env, fila!))
   })
 
   app.post("/api/cuenta/pedido", async (c) => {
@@ -192,11 +244,14 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
     } catch (e) {
       throw new validar.Invalido(e instanceof Error ? e.message : "Certificado inválido")
     }
-    if (info.cuit && info.cuit !== u.cuit) throw new validar.Invalido(`El certificado es del CUIT ${info.cuit}, no del tuyo.`)
-    await c.env.DB.batch([
-      c.env.DB.prepare("UPDATE usuarios SET certificado = ? WHERE id = ?").bind(pem, u.id),
+    if (!info.cuit) throw new validar.Invalido("El certificado no indica a qué CUIT pertenece. Tiene que ser el .crt que descargaste de ARCA.")
+    if (info.cuit !== u.cuit) throw new validar.Invalido(`El certificado es del CUIT ${info.cuit}, no del tuyo.`)
+    // La condición repite los controles en la base, por si el CUIT o la clave cambiaron mientras tanto.
+    const [guardado] = await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE usuarios SET certificado = ? WHERE id = ? AND cuit = ? AND clave_publica = ?").bind(pem, u.id, info.cuit, u.clave_publica),
       c.env.DB.prepare("DELETE FROM tickets WHERE usuario_id = ?").bind(u.id),
     ])
+    if (!guardado.meta.changes) throw new validar.Invalido("Tus datos cambiaron mientras subías el certificado. Recargá la página y probá de nuevo.")
     return c.json(vistaCuenta(c.env, { ...u, certificado: pem }))
   })
 
@@ -214,12 +269,17 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
   app.put("/api/cuenta/clave", async (c) => {
     const u = c.get("usuario")
     const { actual, nueva } = await c.req.json().catch(() => ({}))
+    const limites = [{ clave: `cambio-clave:${u.id}`, maximo: auth.LIMITES.cambioClave }]
+    if (!(await auth.registrarIntento(c.env.DB, limites))) {
+      return c.json({ detail: "Demasiados intentos. Esperá unos minutos y probá de nuevo." }, 429)
+    }
     if (typeof actual !== "string" || !(await auth.verificarClave(actual, u.clave_hash))) {
       throw new validar.Invalido("La contraseña actual no es correcta")
     }
     const hash = await auth.hashearClave(validar.claveNueva(nueva))
     await c.env.DB.prepare("UPDATE usuarios SET clave_hash = ? WHERE id = ?").bind(hash, u.id).run()
     await auth.cerrarOtrasSesiones(c.env.DB, u.id, c.get("token"))
+    await auth.limpiarIntentos(c.env.DB, [limites[0].clave])
     return c.json({ ok: true })
   })
 
@@ -257,8 +317,20 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
   app.get("/api/facturas", async (c) => {
     const u = c.get("usuario")
     const facturas = await datos.historial(c.env.DB, u.id, modoDe(c.env))
-    for (const f of facturas as Record<string, unknown>[]) f.enlace = await enlacePublico(c.env.SECRETO_DATOS, f.id as number)
+    for (const f of facturas as Record<string, unknown>[]) {
+      f.enlace = await enlacePublico(c.env.SECRETO_DATOS, { id: f.id as number, enlace_version: f.enlace_version as number })
+    }
     return c.json(facturas)
+  })
+
+  app.post("/api/facturas/:id/anular-enlace", async (c) => {
+    const f = await c.env.DB.prepare(
+      "UPDATE facturas SET enlace_version = enlace_version + 1 WHERE id = ? AND usuario_id = ? RETURNING id, enlace_version",
+    )
+      .bind(Number(c.req.param("id")), c.get("usuario").id)
+      .first<{ id: number; enlace_version: number }>()
+    if (!f) return c.json({ detail: "Factura no encontrada" }, 404)
+    return c.json({ enlace: await enlacePublico(c.env.SECRETO_DATOS, f) })
   })
 
   app.post("/api/facturas/:id/whatsapp", async (c) => {

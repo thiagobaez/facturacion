@@ -3,6 +3,7 @@ export interface Env {
   ARCHIVOS: R2Bucket
   ASSETS: Fetcher
   SECRETO_DATOS: string
+  SECRETO_DATOS_ANTERIOR?: string
   COOKIE_SEGURA?: string
   SIMULAR_ARCA?: string
 }
@@ -73,6 +74,7 @@ export interface Factura {
   whatsapp_detalle: string | null
   whatsapp_id: string | null
   whatsapp_fecha: string | null
+  enlace_version: number
 }
 
 export interface Paciente {

@@ -36,7 +36,7 @@ Se hace una sola vez:
 ```bash
 npx wrangler login
 npx wrangler d1 create facturacion          # copiá el database_id que te muestra en wrangler.jsonc
-npx wrangler r2 bucket create facturacion-archivos
+npx wrangler r2 bucket create facturacion-pdfs
 openssl rand -base64 32 | npx wrangler secret put SECRETO_DATOS
 npm run db:remoto
 npm run deploy
@@ -80,7 +80,7 @@ Todo se hace desde la pestaña **Cuenta**:
 Se envían desde tu propio WhatsApp, gratis y sin cuentas de Meta:
 
 - Al emitir, cada paciente que tiene teléfono muestra un botón **WhatsApp**. Lo tocás y se abre su chat (en el celular o en WhatsApp Web) con el mensaje ya escrito, y solo apretás enviar.
-- El mensaje lleva un enlace secreto para descargar la factura en PDF, sin necesidad de usuario. El enlace está firmado: no se puede adivinar ni usar para abrir otra factura.
+- El mensaje lleva un enlace secreto para descargar la factura en PDF, sin necesidad de usuario. El enlace está firmado: no se puede adivinar ni usar para abrir otra factura. Vence a los 60 días (al volver a mandarla desde el historial sale uno nuevo) y se puede **anular** en cualquier momento: el anterior deja de funcionar.
 - El texto del mensaje se edita en **Cuenta → Mensaje de WhatsApp**, con `{nombre}`, `{periodo}`, `{importe}` y `{enlace}`.
 - A los pacientes sin teléfono se les puede **copiar el enlace** de la factura.
 
@@ -93,11 +93,29 @@ No es 100% automático a propósito: mandar mensajes solo, sin tocar nada, exige
 - **Numeración:** se piden de a una y en orden. Un candado en D1 evita dos tandas simultáneas de la misma cuenta. Si se corta la conexión en medio de una factura, la app consulta a ARCA si quedó emitida y la recupera.
 - **Copia de los datos del emisor:** cada factura guarda los datos del emisor de ese momento, así el PDF no cambia si después se edita la cuenta.
 - **Seguridad:**
-  - Contraseñas con PBKDF2.
+  - Contraseñas con PBKDF2-SHA256 de 600.000 iteraciones (en rondas encadenadas de 100.000, el máximo que acepta Workers). Las contraseñas viejas se actualizan solas al iniciar sesión.
   - Sesiones de 12 horas en cookie HttpOnly con SameSite=Strict.
-  - Bloqueo tras 10 intentos fallidos en 15 minutos.
+  - Límite de intentos de ingreso en 15 minutos: 10 por usuario desde una misma IP, 30 por IP y 100 por usuario en total. Las IPv6 cuentan por red /64. El tope de 100 no se aplica a los navegadores donde la persona ya entró bien (cookie firmada de 180 días), así nadie puede dejarla afuera fallando a propósito desde muchas IPs. Los intentos ya bloqueados no escriben en la base.
+  - El cambio de contraseña admite 10 intentos con la contraseña actual cada 15 minutos.
+  - Cambiar el CUIT con un certificado cargado pide confirmación y quita el certificado, la clave y el pedido: nunca queda un certificado de otro CUIT.
+  - Antes de pedir cada CAE se anota el comprobante como pendiente. Si el Worker se corta antes de guardarlo, la próxima tanda le pregunta a ARCA y lo guarda (si salió) o lo descarta.
   - Claves privadas cifradas con AES-GCM.
-  - Enlaces de descarga de facturas firmados con HMAC: no se pueden adivinar.
+  - Enlaces de descarga de facturas firmados con HMAC, con vencimiento de 60 días y anulables.
+  - Cabeceras de seguridad (CSP, HSTS, anti-iframe) en todas las respuestas, también en las pantallas estáticas (`public/_headers`).
+  - Los logs de Cloudflare no guardan las URLs de los pedidos, así los enlaces de las facturas no quedan registrados.
+
+### Cambiar `SECRETO_DATOS`
+
+Si creés que se filtró, se puede cambiar sin perder los certificados:
+
+```bash
+npx wrangler secret put SECRETO_DATOS_ANTERIOR   # pegá el secreto actual
+openssl rand -base64 32 | npx wrangler secret put SECRETO_DATOS
+```
+
+Mientras exista `SECRETO_DATOS_ANTERIOR`, la app sigue leyendo lo cifrado con el viejo y vuelve a cifrar cada clave privada con el nuevo la próxima vez que esa cuenta factura. Los enlaces viejos siguen andando hasta que vencen. Cuando todas las cuentas hayan facturado una vez (o pasados 60 días), borralo con `npx wrangler secret delete SECRETO_DATOS_ANTERIOR`. Si el secreto se filtró, no esperes: borralo antes. Las cuentas que todavía no hayan facturado van a tener que generar el certificado de nuevo.
+
+Para que el límite de ingresos aguante también ataques desde muchas IPs, conviene sumar una regla de **Rate limiting** en el panel de Cloudflare (Security → WAF) para `POST /api/login`.
 
 ```bash
 npm test             # pruebas (incluyen verificar con OpenSSL la firma para ARCA y el pedido de certificado)

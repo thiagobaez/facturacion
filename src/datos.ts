@@ -70,7 +70,7 @@ export async function historial(db: D1Database, usuarioId: number, modo: Modo, l
   const { results } = await db
     .prepare(
       "SELECT f.id, f.lote, f.numero, f.pto_vta, f.fecha, f.dni, f.nombre, f.sesiones, f.total, f.desde, f.hasta, f.obra_social, " +
-        "f.whatsapp_estado, f.whatsapp_detalle, p.telefono FROM facturas f " +
+        "f.whatsapp_estado, f.whatsapp_detalle, f.enlace_version, p.telefono FROM facturas f " +
         "LEFT JOIN pacientes p ON p.usuario_id = f.usuario_id AND p.dni = f.dni " +
         "WHERE f.usuario_id = ? AND f.modo = ? ORDER BY f.id DESC LIMIT ?",
     )
@@ -81,12 +81,13 @@ export async function historial(db: D1Database, usuarioId: number, modo: Modo, l
 
 export async function yaFacturados(db: D1Database, usuarioId: number, modo: Modo, dnis: number[], desde: string, hasta: string) {
   if (!dnis.length) return []
-  const marcas = dnis.map(() => "?").join(", ")
+  // Un solo parámetro con la lista en JSON: D1 admite como máximo 100 parámetros por consulta.
   const { results } = await db
     .prepare(
-      `SELECT DISTINCT dni FROM facturas WHERE usuario_id = ? AND modo = ? AND dni IN (${marcas}) AND desde <= ? AND hasta >= ?`,
+      "SELECT DISTINCT dni FROM facturas WHERE usuario_id = ? AND modo = ? AND dni IN (SELECT value FROM json_each(?)) " +
+        "AND desde <= ? AND hasta >= ?",
     )
-    .bind(usuarioId, modo, ...dnis, hasta, desde)
+    .bind(usuarioId, modo, JSON.stringify(dnis), hasta, desde)
     .all<{ dni: number }>()
   return results.map((r) => r.dni)
 }
@@ -118,6 +119,10 @@ export async function tomarCandado(db: D1Database, usuarioId: number, segundos =
     .bind(usuarioId, momento + segundos, momento)
     .run()
   return r.meta.changes > 0
+}
+
+export async function renovarCandado(db: D1Database, usuarioId: number, segundos = 300, ahora = Date.now()): Promise<void> {
+  await db.prepare("UPDATE candados SET hasta = ? WHERE usuario_id = ?").bind(Math.floor(ahora / 1000) + segundos, usuarioId).run()
 }
 
 export async function soltarCandado(db: D1Database, usuarioId: number): Promise<void> {

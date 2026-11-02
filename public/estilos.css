@@ -193,7 +193,7 @@ h1 { font-size: 20px; font-weight: 700; line-height: 1.2; letter-spacing: -.01em
 	gap: 12px;
 }
 
-.barra-tanda .error { order: 3; }
+.barra-tanda .error { order: -1; }
 .barra-tanda .btn { min-width: 170px; text-align: center; }
 
 .aviso {
@@ -519,6 +519,8 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .ayuda { font-size: 12.5px; color: var(--muted); }
 .ficha .error { margin-top: 16px; }
 .ficha-botones { margin-top: 24px; }
+.nuevo-tanda { margin-top: 28px; }
+.nuevo-tanda .ficha-botones { margin-top: 20px; }
 .borrar { margin-left: auto; color: var(--bad); }
 .borrar:hover { background: var(--bad-bg); }
 .confirmar-borrado { margin-top: 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: var(--bad-bg); font-size: 14.5px; }
@@ -698,13 +700,16 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 	.confirmar .botones { width: 100%; flex-direction: column-reverse; }
 	.resultado .botones { flex-direction: column; align-items: stretch; text-align: center; }
 	.lista li { grid-template-columns: 28px 1fr auto; }
-	.lista .ver { grid-column: 3; grid-row: 2; justify-self: end; }
+	.lista .ver { grid-column: 3; grid-row: 2; justify-self: end; align-self: start; }
+	.lista .linea-envio { grid-column: 2; grid-row: 2; flex-direction: column; align-items: flex-start; gap: 0; }
+	.lista .linea-envio .enlace, .lista .linea-envio .copiar-enlace { margin-left: -8px; }
 	.lista .monto { grid-row: 1; grid-column: 3; }
 	.barra { flex-direction: column; align-items: stretch; gap: 10px; }
 	.barra .btn { text-align: center; }
 	.ficha .campos { grid-template-columns: 1fr; }
 	.ficha .campos.cobertura { grid-template-columns: 1fr 1fr; }
 	.ficha .campos.cobertura .campo:first-child { grid-column: 1 / -1; }
+	.ficha .campos.cobertura .campo:last-child { grid-column: auto; }
 	.ficha-botones { flex-direction: column; align-items: stretch; text-align: center; }
 	.borrar { margin-left: 0; }
 	.lista.pacientes .tel { grid-column: 2; grid-row: 2; text-align: left; }
@@ -726,3 +731,6 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .guia-arca summary:hover { color: var(--rose-deep); }
 .guia-arca details p { font-size: 14.5px; color: var(--ink-soft); line-height: 1.55; margin-bottom: 10px; }
 .guia-arca details p:last-child { margin-bottom: 14px; }
+
+/* Si una etiqueta ocupa dos líneas, los campos de la misma fila quedan alineados. */
+.form-cuenta .campos { align-items: end; }

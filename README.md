@@ -36,12 +36,14 @@ Se hace una sola vez:
 ```bash
 npx wrangler login
 npx wrangler d1 create facturacion          # copiá el database_id que te muestra en wrangler.jsonc
-npx wrangler r2 bucket create facturacion-pdfs
+npx wrangler r2 bucket create facturacion-pdfs   # privado: NUNCA le actives r2.dev ni un dominio propio
 openssl rand -base64 32 | npx wrangler secret put SECRETO_DATOS
 npm run db:remoto
 npm run deploy
 npm run usuario -- nuevo tu-usuario --remoto
 ```
+
+La app queda en `https://factura.baez.com.ar` (dominio propio del Worker, en `routes` de `wrangler.jsonc`). Los PDF solo se sirven a través del Worker: por la sesión o por enlaces firmados `/f/…`. Si el bucket fuera público, cualquiera podría bajar todas las facturas probando rutas `u/<usuario>/facturas/<número>.pdf`.
 
 Cada vez que cambies algo: `npm run deploy`. Si hay migraciones nuevas, antes corré `npm run db:remoto`.
 

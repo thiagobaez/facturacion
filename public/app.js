@@ -741,7 +741,24 @@ function aplicarCuenta(datos) {
 		? `Para empezar a facturar completá en <button type="button" class="enlace ir-cuenta">Cuenta</button>: ${escapar(new Intl.ListFormat('es').format(falta))}.`
 		: '';
 	$('#pendiente').hidden = !falta.length;
+	const dias = diasParaVencer(datos);
+	$('#vence-certificado').innerHTML = dias !== null && dias > 0 && dias <= 30
+		? `Tu certificado de ARCA vence en ${plural(dias, 'día', 'días')}. Después de esa fecha no vas a poder facturar: renovalo desde <button type="button" class="enlace ir-arca">Cuenta → Conexión con ARCA</button>.`
+		: '';
+	$('#vence-certificado').hidden = !$('#vence-certificado').innerHTML;
 }
+
+function diasParaVencer(c) {
+	const vence = c.arca?.certificado?.vence;
+	if (!vence || c.simulacion) return null;
+	return Math.ceil((Date.parse(vence) - Date.now()) / 86_400_000);
+}
+
+document.addEventListener('click', e => {
+	if (!e.target.closest('.ir-arca')) return;
+	mostrarVista('cuenta');
+	abrirPanel('arca');
+});
 
 document.addEventListener('click', e => {
 	if (!e.target.closest('.ir-cuenta')) return;
@@ -764,12 +781,19 @@ function pintarResumenCuenta() {
 	const cuit = c.cuit ? `CUIT ${c.cuit.slice(0, 2)}-${c.cuit.slice(2, 10)}-${c.cuit.slice(10)}` : '';
 	$('#resumen-datos').textContent = c.nombre && c.cuit ? `${c.nombre} · ${cuit} · Punto de venta ${c.punto_venta}` : 'Falta completar';
 	const cert = c.arca?.certificado;
-	$('#resumen-arca').textContent = cert ? `Conectada · certificado hasta el ${new Date(cert.vence).toLocaleDateString('es-AR')}` : 'Falta conectar: sin esto no se puede facturar';
+	const dias = diasParaVencer(c);
+	$('#resumen-arca').textContent = !cert
+		? 'Falta conectar: sin esto no se puede facturar'
+		: dias !== null && dias <= 0
+			? `El certificado venció el ${new Date(cert.vence).toLocaleDateString('es-AR')}: renovalo para seguir facturando`
+			: dias !== null && dias <= 30
+				? `El certificado vence en ${plural(dias, 'día', 'días')}: renovalo`
+				: `Conectada · certificado hasta el ${new Date(cert.vence).toLocaleDateString('es-AR')}`;
 	const mensaje = (c.mensaje_whatsapp || '').replace(/\s+/g, ' ');
 	$('#resumen-whatsapp').textContent = mensaje.length > 70 ? `${mensaje.slice(0, 70)}…` : mensaje;
 	$('#resumen-clave').textContent = `Usuario: ${c.usuario}`;
 	$$('.menu-cuenta [data-abrir]').forEach(b => {
-		const pendiente = (b.dataset.abrir === 'datos' && !(c.nombre && c.cuit)) || (b.dataset.abrir === 'arca' && !cert && !c.simulacion);
+		const pendiente = (b.dataset.abrir === 'datos' && !(c.nombre && c.cuit)) || (b.dataset.abrir === 'arca' && !c.simulacion && (!cert || (dias !== null && dias <= 30)));
 		b.classList.toggle('pendiente', pendiente);
 	});
 }

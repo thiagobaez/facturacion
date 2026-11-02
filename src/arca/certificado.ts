@@ -62,6 +62,14 @@ export function leerCertificado(certificadoPem: string, clavePublicaPem: string)
   }
 }
 
+export function venceCertificado(certificadoPem: string): Date | null {
+  try {
+    return new x509.X509Certificate(certificadoPem.trim()).notAfter
+  } catch {
+    return null
+  }
+}
+
 export function certificadoDesdeArchivo(contenidoBase64: string): string {
   const crudo = deBase64(contenidoBase64)
   const comoTexto = new TextDecoder().decode(crudo).trim()

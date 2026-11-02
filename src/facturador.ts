@@ -2,7 +2,8 @@ import { cifrar, descifrarConCualquiera, secretos } from "./cifrado"
 import * as datos from "./datos"
 import { generarPdf, nombreArchivo } from "./pdf"
 import type { Env, Factura, Modo, Usuario } from "./tipos"
-import { aCentavos, deCentavos } from "./util"
+import { aCentavos, deCentavos, dmy } from "./util"
+import { venceCertificado } from "./arca/certificado"
 import { ErrorArca, pedirTicket, type Ticket } from "./arca/wsaa"
 import { FACTURA_C, Simulador, Wsfe, type ClienteFacturacion, type Comprobante, type ResultadoCae } from "./arca/wsfe"
 import { enlacePublico } from "./enlaces"
@@ -64,7 +65,13 @@ export function faltantes(u: Usuario, env: Env): string[] {
   const falta: string[] = []
   if (!u.nombre.trim()) falta.push("tu nombre")
   if (!/^\d{11}$/.test(u.cuit)) falta.push("tu CUIT")
-  if (!simulado(env) && (!u.certificado || !u.clave_privada)) falta.push("el certificado de ARCA")
+  if (!simulado(env)) {
+    const vence = u.certificado ? venceCertificado(u.certificado) : null
+    if (!u.certificado || !u.clave_privada) falta.push("el certificado de ARCA")
+    else if (vence && vence.getTime() <= Date.now()) {
+      falta.push(`un certificado de ARCA nuevo (el tuyo venció el ${vence.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })})`)
+    }
+  }
   return falta
 }
 
@@ -147,6 +154,27 @@ function sentenciaSinPendiente(env: Env, usuarioId: number, modo: Modo, ptoVta: 
   )
 }
 
+// ARCA no acepta una factura con fecha anterior a la última emitida en el mismo punto de venta.
+// Se mira la base (sirve también en simulación) y el último comprobante en ARCA (por si se
+// facturó desde otro lado). Si ARCA no contesta, sigue: el error va a salir en cada factura.
+async function revisarFecha(env: Env, u: Usuario, modo: Modo, cliente: ClienteFacturacion, fecha: string): Promise<void> {
+  const fila = await env.DB.prepare("SELECT MAX(fecha) AS f FROM facturas WHERE usuario_id = ? AND modo = ? AND pto_vta = ? AND cbte_tipo = ?")
+    .bind(u.id, modo, u.punto_venta, FACTURA_C)
+    .first<{ f: string | null }>()
+  let minima = fila?.f ?? null
+  try {
+    const ultimo = await cliente.ultimoAutorizado(u.punto_venta, FACTURA_C)
+    const enArca = ultimo > 0 ? (await cliente.consultar(u.punto_venta, FACTURA_C, ultimo))?.fecha : undefined
+    if (enArca && (!minima || enArca > minima)) minima = enArca
+  } catch {}
+  if (minima && fecha < minima) {
+    throw new ErrorUsuario(
+      `La fecha de la factura no puede ser anterior al ${dmy(minima)}: es la fecha de la última factura de tu punto de venta ` +
+        `${u.punto_venta} y ARCA no acepta fechas para atrás. Elegí el ${dmy(minima)} o una fecha posterior.`,
+    )
+  }
+}
+
 // Resuelve los comprobantes que quedaron sin confirmar en una tanda anterior. Devuelve cuántos
 // estaban emitidos en ARCA y se guardaron ahora. Si alguno no se puede confirmar, no deja facturar.
 async function resolverPendientes(env: Env, u: Usuario, modo: Modo, cliente: ClienteFacturacion): Promise<number> {
@@ -210,6 +238,7 @@ export async function facturarLote(env: Env, u: Usuario, lote: Lote, dep: Depend
   try {
     const cliente = dep.cliente ?? (await clienteDe(env, u, dep.pedir))
     recuperadas = await resolverPendientes(env, u, modo, cliente)
+    await revisarFecha(env, u, modo, cliente, lote.fecha)
     const precio = aCentavos(lote.precio)
     const emisor = JSON.stringify(datos.emisorDe(u))
     const fichas = new Map((await datos.pacientes(env.DB, u.id)).map((p) => [p.dni, p]))

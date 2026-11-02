@@ -29,6 +29,7 @@ export interface ResultadoCae {
   cae?: string
   caeVto?: string
   docNro?: number
+  fecha?: string
   observaciones: string[]
   errores: string[]
 }
@@ -149,6 +150,7 @@ export class Wsfe implements ClienteFacturacion {
       cae: texto(datos, "CodAutorizacion") ?? undefined,
       caeVto: isoDe(texto(datos, "FchVto")),
       docNro: Number(texto(datos, "DocNro") ?? 0),
+      fecha: isoDe(texto(datos, "CbteFch")),
       observaciones: [],
       errores: [],
     }
@@ -171,7 +173,7 @@ export class Simulador implements ClienteFacturacion {
     this.ultimo = c.numero
     const vence = new Date(Date.parse(c.fecha) + 10 * 86_400_000).toISOString().slice(0, 10)
     const cae = Array.from(crypto.getRandomValues(new Uint8Array(14)), (b) => String(b % 10)).join("")
-    const resultado = { aprobado: true, cae, caeVto: vence, docNro: c.docNro, observaciones: [], errores: [] }
+    const resultado = { aprobado: true, cae, caeVto: vence, docNro: c.docNro, fecha: c.fecha, observaciones: [], errores: [] }
     this.emitidos.set(`${c.ptoVta}-${c.numero}`, resultado)
     return resultado
   }

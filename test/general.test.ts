@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { esDispositivoConocido, hashearClave, limitesLogin, marcaDispositivo, necesitaRehash, redDe, verificarClave } from "../src/auth"
 import { cifrar, descifrar, descifrarConCualquiera } from "../src/cifrado"
-import { describirPeriodo } from "../src/facturador"
+import { describirPeriodo, faltantes } from "../src/facturador"
+import type { Env, Usuario } from "../src/tipos"
 import { apto, generarPdf, nombreArchivo, urlQr } from "../src/pdf"
 import { aCentavos, deBase64, deCentavos, pesos } from "../src/util"
 import * as validar from "../src/validacion"
@@ -236,5 +237,35 @@ describe("límite de intentos: redes y dispositivos", () => {
     expect(await esDispositivoConocido(["otro-secreto-de-prueba-123"], "ana", marca)).toBe(false)
     expect(await esDispositivoConocido([SECRETO], "ana", "A".repeat(22))).toBe(false)
     expect(await esDispositivoConocido([SECRETO], "ana", undefined)).toBe(false)
+  })
+})
+
+describe("certificado vencido", () => {
+  async function certificado(dias: number) {
+    const x509 = await import("@peculiar/x509")
+    x509.cryptoProvider.set(crypto)
+    const alg = { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256", publicExponent: new Uint8Array([1, 0, 1]), modulusLength: 2048 }
+    const llaves = (await crypto.subtle.generateKey(alg, true, ["sign", "verify"])) as CryptoKeyPair
+    const c = await x509.X509CertificateGenerator.createSelfSigned({
+      serialNumber: "01",
+      name: "CN=prueba",
+      notBefore: new Date(Date.now() - 400 * 86_400_000),
+      notAfter: new Date(Date.now() + dias * 86_400_000),
+      keys: llaves,
+      signingAlgorithm: alg,
+    })
+    return c.toString("pem")
+  }
+  const usuario = (cert: string) => ({ nombre: "Ana", cuit: "20111111112", certificado: cert, clave_privada: "v1:x:y" }) as unknown as Usuario
+  const env = { SIMULAR_ARCA: "false" } as unknown as Env
+
+  it("bloquea la emisión si el certificado venció", async () => {
+    const falta = faltantes(usuario(await certificado(-1)), env)
+    expect(falta).toHaveLength(1)
+    expect(falta[0]).toMatch(/certificado de ARCA nuevo \(el tuyo venció el/)
+  })
+
+  it("deja facturar si el certificado sigue vigente", async () => {
+    expect(faltantes(usuario(await certificado(10)), env)).toEqual([])
   })
 })

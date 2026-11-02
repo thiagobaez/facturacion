@@ -66,9 +66,13 @@ function preguntarOculto(pregunta) {
 }
 
 async function pedirClave() {
-  const clave = await preguntarOculto("Contraseña (mínimo 10 caracteres): ")
+  const clave = await preguntarOculto("Contraseña (mínimo 10 caracteres, una mayúscula y un símbolo): ")
   if (clave.length < 10) {
     console.error("Tiene que tener al menos 10 caracteres.")
+    process.exit(1)
+  }
+  if (!/\p{Lu}/u.test(clave) || !/[^\p{L}\p{N}\s]/u.test(clave)) {
+    console.error("Tiene que tener al menos una mayúscula y un símbolo.")
     process.exit(1)
   }
   if ((await preguntarOculto("Repetila: ")) !== clave) {

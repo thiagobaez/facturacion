@@ -128,5 +128,7 @@ export function datosCuenta(cuerpo: any) {
 export function claveNueva(clave: unknown): string {
   if (typeof clave !== "string" || clave.length < 10) throw new Invalido("La contraseña tiene que tener al menos 10 caracteres")
   if (clave.length > 200) throw new Invalido("La contraseña es demasiado larga")
+  if (!/\p{Lu}/u.test(clave)) throw new Invalido("La contraseña tiene que tener al menos una mayúscula")
+  if (!/[^\p{L}\p{N}\s]/u.test(clave)) throw new Invalido("La contraseña tiene que tener al menos un símbolo (por ejemplo ! ? # $ % . -)")
   return clave
 }

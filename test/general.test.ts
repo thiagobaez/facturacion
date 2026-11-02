@@ -269,3 +269,14 @@ describe("certificado vencido", () => {
     expect(faltantes(usuario(await certificado(10)), env)).toEqual([])
   })
 })
+
+describe("contraseña nueva", () => {
+  it("pide largo, mayúscula y símbolo", () => {
+    expect(() => validar.claveNueva("Corta!")).toThrow(/10 caracteres/)
+    expect(() => validar.claveNueva("sinmayuscula!")).toThrow(/mayúscula/)
+    expect(() => validar.claveNueva("SinSimbolo123")).toThrow(/símbolo/)
+    expect(() => validar.claveNueva("Con espacio 12")).toThrow(/símbolo/)
+    expect(validar.claveNueva("Ñandú-de-campo")).toBe("Ñandú-de-campo")
+    expect(validar.claveNueva("Buenisima#2026")).toBe("Buenisima#2026")
+  })
+})

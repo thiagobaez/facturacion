@@ -947,6 +947,8 @@ formWhatsApp.addEventListener('submit', async e => {
 formClave.addEventListener('submit', async e => {
 	e.preventDefault();
 	if (formClave.nueva.value.length < 10) return estado(formClave, 'La nueva tiene que tener al menos 10 caracteres.');
+	if (!/\p{Lu}/u.test(formClave.nueva.value)) return estado(formClave, 'La nueva tiene que tener al menos una mayúscula.');
+	if (!/[^\p{L}\p{N}\s]/u.test(formClave.nueva.value)) return estado(formClave, 'La nueva tiene que tener al menos un símbolo (por ejemplo ! ? # $ % . -).');
 	if (formClave.nueva.value !== formClave.repetida.value) return estado(formClave, 'Las contraseñas nuevas no coinciden.');
 	try {
 		await api('/api/cuenta/clave', { method: 'PUT', body: JSON.stringify({ actual: formClave.actual.value, nueva: formClave.nueva.value }) });

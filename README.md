@@ -45,7 +45,13 @@ npm run usuario -- nuevo tu-usuario --remoto
 
 La app queda en `https://facturacion.baez.com.ar` (dominio propio del Worker, en `routes` de `wrangler.jsonc`). Los PDF solo se sirven a través del Worker: por la sesión o por enlaces firmados `/f/…`. Si el bucket fuera público, cualquiera podría bajar todas las facturas probando rutas `u/<usuario>/facturas/<número>.pdf`.
 
-Cada vez que cambies algo: `npm run deploy`. Si hay migraciones nuevas, antes corré `npm run db:remoto`.
+Cada push a `main` se publica solo con GitHub Actions (`.github/workflows/deploy.yml`): corre el chequeo de tipos y los tests, aplica las migraciones pendientes y publica. Si algo falla, no publica nada. Los pull requests solo corren los tests.
+
+Necesita dos secretos en GitHub (Settings → Secrets and variables → Actions):
+- `CLOUDFLARE_ACCOUNT_ID`: el ID de la cuenta de Cloudflare.
+- `CLOUDFLARE_API_TOKEN`: un token creado desde la plantilla "Edit Cloudflare Workers", con el permiso de cuenta **D1: Edit** agregado y la zona `baez.com.ar` incluida.
+
+A mano sigue funcionando: `npm run db:remoto` y después `npm run deploy`.
 
 > **Importante:** guardá `SECRETO_DATOS` en un lugar seguro. Con él se cifran las claves privadas de ARCA y se firman los enlaces de las facturas. Si se pierde, cada cuenta tiene que volver a generar su certificado.
 

@@ -1,0 +1,50 @@
+name: Tests y publicación
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Nunca dos publicaciones a la vez: si llega otro push, espera a que termine la anterior.
+concurrency:
+  group: publicar-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Herramientas que usan los tests (pdftotext)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  publicar:
+    needs: probar
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: produccion
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Migraciones de la base (antes del código nuevo)
+        run: npx wrangler d1 migrations apply facturacion --remote
+      - name: Publicar en Cloudflare
+        run: npx wrangler deploy --message "GitHub ${GITHUB_SHA::7}"

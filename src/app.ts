@@ -98,7 +98,6 @@ function vistaCuenta(env: Env, u: Usuario) {
     iibb: u.iibb,
     inicio_actividades: u.inicio_actividades,
     punto_venta: u.punto_venta,
-    precio_sesion: u.precio_sesion,
     descripcion: u.descripcion,
     simulacion: simulado(env),
     arca: { tiene_pedido: !!u.pedido_certificado, certificado },
@@ -203,9 +202,9 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
         "certificado = CASE WHEN cuit = ?1 THEN certificado END, clave_privada = CASE WHEN cuit = ?1 THEN clave_privada END, " +
         "clave_publica = CASE WHEN cuit = ?1 THEN clave_publica END, pedido_certificado = CASE WHEN cuit = ?1 THEN pedido_certificado END, " +
         "nombre = ?2, titulo = ?3, cuit = ?1, domicilio = ?4, iibb = ?5, inicio_actividades = ?6, " +
-        "punto_venta = ?7, precio_sesion = ?8, descripcion = ?9 WHERE id = ?10 RETURNING *",
+        "punto_venta = ?7, descripcion = ?8 WHERE id = ?9 RETURNING *",
     )
-      .bind(d.cuit, d.nombre, d.titulo, d.domicilio, d.iibb, d.inicio_actividades, d.punto_venta, d.precio_sesion, d.descripcion, u.id)
+      .bind(d.cuit, d.nombre, d.titulo, d.domicilio, d.iibb, d.inicio_actividades, d.punto_venta, d.descripcion, u.id)
       .first<Usuario>()
     if (cambiaCuit) await c.env.DB.prepare("DELETE FROM tickets WHERE usuario_id = ?").bind(u.id).run()
     return c.json(vistaCuenta(c.env, fila!))

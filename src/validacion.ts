@@ -121,7 +121,6 @@ export function datosCuenta(cuerpo: any) {
     iibb: cadena(cuerpo?.iibb, "Ingresos Brutos", 0, 40),
     inicio_actividades: inicio,
     punto_venta: puntoVenta,
-    precio_sesion: String(cuerpo?.precio_sesion ?? "").trim() ? precio(cuerpo.precio_sesion) : "0",
     descripcion: cadena(cuerpo?.descripcion, "el concepto", 3, 200),
   }
 }

@@ -814,7 +814,6 @@ function pintarCuenta() {
 	for (const campo of ['nombre', 'titulo', 'domicilio', 'iibb', 'inicio_actividades', 'descripcion']) formDatos[campo].value = c[campo] || '';
 	formDatos.cuit.value = c.cuit ? `${c.cuit.slice(0, 2)}-${c.cuit.slice(2, 10)}-${c.cuit.slice(10)}` : '';
 	formDatos.punto_venta.value = c.punto_venta || 1;
-	formDatos.precio_sesion.value = +c.precio_sesion ? (+c.precio_sesion).toLocaleString('es-AR') : '';
 	pintarArca();
 	formWhatsApp.mensaje.value = c.mensaje_whatsapp || '';
 	pintarVistaPrevia();
@@ -845,7 +844,7 @@ formDatos.addEventListener('submit', async e => {
 		const datos = {
 			nombre: formDatos.nombre.value, titulo: formDatos.titulo.value, cuit: formDatos.cuit.value,
 			domicilio: formDatos.domicilio.value, iibb: formDatos.iibb.value, inicio_actividades: formDatos.inicio_actividades.value,
-			punto_venta: parseInt(formDatos.punto_venta.value, 10), precio_sesion: leerPrecio(formDatos.precio_sesion.value).toFixed(2),
+			punto_venta: parseInt(formDatos.punto_venta.value, 10),
 			descripcion: formDatos.descripcion.value,
 		};
 		let guardada;
@@ -862,7 +861,6 @@ formDatos.addEventListener('submit', async e => {
 		aplicarCuenta({ ...cuenta, ...guardada });
 		pintarCuenta();
 		estado(formDatos, 'Datos guardados.', true);
-		if (!leerBorrador()?.precio && +cuenta.precio_sesion) tanda.precio = (+cuenta.precio_sesion).toLocaleString('es-AR');
 		if (!leerBorrador()?.descripcion) tanda.descripcion = cuenta.descripcion;
 	} catch (err) {
 		estado(formDatos, err.message);
@@ -981,7 +979,6 @@ async function iniciar() {
 		tanda.sel = new Map(lista(b.sel).map(i => [i.dni, i]));
 		tanda.extras = new Map(lista(b.extras).map(({ dni, nombre }) => [dni, { dni, nombre }]));
 	}
-	if (!tanda.precio && +datos.precio_sesion) tanda.precio = (+datos.precio_sesion).toLocaleString('es-AR');
 	if (!tanda.descripcion) tanda.descripcion = datos.descripcion || 'Sesión de psicoterapia';
 	irAPaso(1);
 	cargarPacientes();

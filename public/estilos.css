@@ -637,7 +637,7 @@ input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--
 .centrada { text-align: center; }
 #login { margin-top: 26px; text-align: left; display: flex; flex-direction: column; gap: 16px; }
 #login .btn { text-align: center; }
-#login .error { order: 0; }
+#login .error { order: -1; }
 
 @keyframes up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes float { from { transform: translate(0, 0) scale(1); } to { transform: translate(60px, 40px) scale(1.12); } }

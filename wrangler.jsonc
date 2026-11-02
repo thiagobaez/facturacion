@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "facturacion",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "run_worker_first": ["/api/*", "/facturas/*", "/lotes/*", "/f/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "facturacion",
+      "database_id": "REEMPLAZAR_CON_EL_ID_DE_D1",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ARCHIVOS",
+      "bucket_name": "facturacion-archivos"
+    }
+  ],
+  "vars": {
+    "COOKIE_SEGURA": "true"
+  }
+}

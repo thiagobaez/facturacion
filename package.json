@@ -1,0 +1,30 @@
+{
+  "name": "facturacion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 migrations apply facturacion --local",
+    "db:remoto": "wrangler d1 migrations apply facturacion --remote",
+    "usuario": "node scripts/usuario.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@peculiar/x509": "^3.1.0",
+    "asn1js": "^4.0.0",
+    "fflate": "^0.8.3",
+    "hono": "^4.13.16",
+    "pdf-lib": "^1.17.1",
+    "pkijs": "^4.0.1",
+    "qrcode-generator": "^2.0.4",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261102.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.156.1"
+  }
+}

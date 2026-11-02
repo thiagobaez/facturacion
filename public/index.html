@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Facturación</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#f4ece6">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<div class="blobs" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<main class="sheet">
+
+	<header class="top">
+		<div class="identidad">
+			<span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></svg></span>
+			<div>
+				<h1 id="nombre-app">Facturación</h1>
+				<p class="eyebrow" id="emisor">&nbsp;</p>
+			</div>
+		</div>
+		<div class="sesion">
+			<span class="usuario-top"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.2-3.3 3.9-5 7-5s5.8 1.7 7 5"/></svg><span id="usuario-top"></span></span>
+			<button type="button" class="salir" id="salir">Salir</button>
+		</div>
+	</header>
+	<p class="aviso" id="aviso" hidden></p>
+	<p class="aviso pendiente" id="pendiente" hidden></p>
+	<nav class="tabs" role="tablist">
+		<button role="tab" aria-selected="true" data-vista="nueva">Facturar</button>
+		<button role="tab" aria-selected="false" data-vista="pacientes">Pacientes</button>
+		<button role="tab" aria-selected="false" data-vista="historial">Historial</button>
+		<button role="tab" aria-selected="false" data-vista="cuenta">Cuenta</button>
+	</nav>
+
+	<section class="vista" id="vista-nueva">
+
+		<div id="asistente">
+			<ol class="pasos-tanda" aria-label="Pasos para facturar">
+				<li data-paso="1"><span>1</span>Período</li>
+				<li data-paso="2"><span>2</span>Pacientes</li>
+				<li data-paso="3"><span>3</span>Emitir</li>
+			</ol>
+
+			<section class="paso" data-paso="1">
+				<h2>¿Qué sesiones vas a facturar?</h2>
+				<div class="opciones-periodo" id="opciones-periodo" role="radiogroup" aria-label="Período"></div>
+				<div class="campos dos" id="fechas-otras" hidden>
+					<label class="campo">
+						<span>Desde</span>
+						<input type="date" id="desde">
+					</label>
+					<label class="campo">
+						<span>Hasta</span>
+						<input type="date" id="hasta">
+					</label>
+				</div>
+				<label class="campo precio-sesion">
+					<span>Cada sesión cuesta</span>
+					<span class="con-signo"><i>$</i><input type="text" id="precio" inputmode="decimal" placeholder="0"></span>
+				</label>
+			</section>
+
+			<section class="paso" data-paso="2" hidden>
+				<h2>¿A quién le facturás?</h2>
+				<p class="nota">Tocá a cada paciente y elegí cuántas sesiones tuvo.</p>
+				<div class="barra">
+					<input type="search" class="buscar" id="buscar-tanda" placeholder="Buscar por nombre o DNI">
+					<button type="button" class="btn ghost chico" id="repetir" hidden>Repetir la tanda anterior</button>
+				</div>
+				<ul class="elegir" id="elegir"></ul>
+
+				<form class="nuevo-tanda" id="nuevo-tanda" hidden novalidate>
+					<p class="ficha-titulo">Paciente nuevo</p>
+					<div class="campos">
+						<label class="campo">
+							<span>DNI</span>
+							<input type="text" name="dni" inputmode="numeric" autocomplete="off">
+						</label>
+						<label class="campo doble">
+							<span>Nombre y apellido</span>
+							<input type="text" name="nombre" autocomplete="off">
+						</label>
+					</div>
+					<p class="error" id="nuevo-error" role="alert" hidden></p>
+					<div class="botones">
+						<button type="submit" class="btn chico">Agregar</button>
+						<button type="button" class="enlace" id="cancelar-nuevo">Cancelar</button>
+					</div>
+				</form>
+
+				<div class="acciones-filas" id="acciones-tanda">
+					<button type="button" class="enlace" id="nuevo-en-tanda">+ Paciente nuevo</button>
+					<button type="button" class="enlace" id="mostrar-pegar">Pegar desde Excel</button>
+				</div>
+
+				<div class="pegar" id="pegar" hidden>
+					<p class="nota">Copiá las columnas DNI, nombre y sesiones de tu planilla y pegalas acá.</p>
+					<textarea id="pegado" rows="4" placeholder="30111222	Ana Pérez	4"></textarea>
+					<div class="acciones-filas">
+						<button type="button" class="btn ghost chico" id="importar">Agregar a la tanda</button>
+						<button type="button" class="enlace" id="cancelar-pegar">Cancelar</button>
+					</div>
+				</div>
+			</section>
+
+			<section class="paso" data-paso="3" hidden>
+				<h2>Revisá y emití</h2>
+				<p class="nota" id="revision-periodo"></p>
+				<ol class="lista revision" id="revision"></ol>
+				<div class="total-grande"><span>Total</span><b id="revision-total"></b></div>
+				<p class="aviso-dup" id="aviso-dup" hidden></p>
+				<details class="detalles" id="detalles">
+					<summary><span id="detalles-resumen"></span><i>Cambiar</i></summary>
+					<div class="campos">
+						<label class="campo">
+							<span>Fecha de la factura</span>
+							<input type="date" id="fecha">
+						</label>
+						<label class="campo">
+							<span>Vence el pago</span>
+							<input type="date" id="vto_pago">
+						</label>
+						<label class="campo">
+							<span>Concepto</span>
+							<input type="text" id="descripcion">
+						</label>
+					</div>
+				</details>
+			</section>
+
+			<div class="barra-tanda">
+				<p class="resumen" id="resumen"></p>
+				<p class="error" id="error" role="alert" hidden></p>
+				<div class="botones">
+					<button type="button" class="enlace" id="atras" hidden>Atrás</button>
+					<button type="button" class="btn" id="siguiente">Siguiente</button>
+				</div>
+			</div>
+		</div>
+
+		<section class="emitiendo" id="emitiendo" hidden>
+			<div class="hilo"><i></i></div>
+			<p>Pidiendo las autorizaciones a ARCA…</p>
+			<p class="nota">No cierres esta ventana.</p>
+		</section>
+
+		<section class="bloque resultado" id="resultado" hidden>
+			<h2>Listo</h2>
+			<p class="titular" id="resultado-titular"></p>
+			<p class="ayuda" id="resultado-ayuda" hidden>Tocá <b>WhatsApp</b> en cada paciente: se abre su chat con el mensaje listo y solo tenés que enviarlo.</p>
+			<ol class="lista" id="resultado-lista"></ol>
+			<div class="botones">
+				<a class="btn" id="zip" href="#">Descargar todas</a>
+				<button type="button" class="btn ghost" id="reintentar" hidden>Reintentar las que fallaron</button>
+				<button type="button" class="enlace" id="otra">Hacer otra tanda</button>
+			</div>
+		</section>
+
+	</section>
+
+	<section class="vista" id="vista-pacientes" hidden>
+		<section class="bloque">
+			<h2>Pacientes</h2>
+			<p class="nota">Con el teléfono cargado, les mandás la factura por WhatsApp con un toque.</p>
+			<div class="barra">
+				<input type="search" class="buscar" id="buscar-paciente" placeholder="Buscar por nombre o DNI">
+				<button type="button" class="btn ghost chico" id="nuevo-paciente">Nuevo paciente</button>
+			</div>
+			<ol class="lista pacientes" id="lista-pacientes"></ol>
+
+			<form id="ficha" class="ficha" hidden novalidate>
+				<p class="ficha-titulo" id="ficha-titulo"></p>
+				<div class="campos">
+					<label class="campo">
+						<span>DNI</span>
+						<input type="text" name="dni" inputmode="numeric" autocomplete="off">
+					</label>
+					<label class="campo doble">
+						<span>Nombre y apellido</span>
+						<input type="text" name="nombre" autocomplete="off">
+					</label>
+				</div>
+				<label class="campo ancho">
+					<span>Teléfono (WhatsApp)</span>
+					<input type="tel" name="telefono" placeholder="343 412-3456" autocomplete="off">
+					<small class="ayuda">Con código de área, sin el 0 y sin el 15. Sirve para mandarle la factura por WhatsApp.</small>
+				</label>
+				<div class="campos cobertura">
+					<label class="campo">
+						<span>Obra social <small>(opcional)</small></span>
+						<input type="text" name="obra_social" placeholder="OSDE" autocomplete="off">
+					</label>
+					<label class="campo">
+						<span>Plan</span>
+						<input type="text" name="plan" placeholder="310" autocomplete="off">
+					</label>
+					<label class="campo">
+						<span>N.º de socio</span>
+						<input type="text" name="numero_socio" autocomplete="off">
+					</label>
+				</div>
+				<small class="ayuda">Si la completás, aparece en la factura.</small>
+				<label class="campo ancho">
+					<span>Notas <small>(solo para vos, no salen en la factura)</small></span>
+					<textarea name="notas" rows="3" placeholder="Por ejemplo: la factura la paga la mamá"></textarea>
+				</label>
+				<p class="error" id="ficha-error" role="alert" hidden></p>
+				<div class="confirmar-borrado" id="confirmar-borrado" hidden>
+					<p>¿Borrar a este paciente? Sus facturas quedan en el historial.</p>
+					<div class="botones">
+						<button type="button" class="enlace" id="no-borrar">No</button>
+						<button type="button" class="btn chico peligro" id="si-borrar">Sí, borrar</button>
+					</div>
+				</div>
+				<div class="botones ficha-botones">
+					<button type="submit" class="btn" id="guardar-paciente">Guardar</button>
+					<button type="button" class="enlace" id="cancelar-ficha">Cancelar</button>
+					<button type="button" class="enlace borrar" id="borrar-paciente">Borrar paciente</button>
+				</div>
+			</form>
+		</section>
+	</section>
+
+	<section class="vista" id="vista-historial" hidden>
+		<section class="bloque">
+			<h2>Facturas emitidas</h2>
+			<input type="search" class="buscar" id="buscar" placeholder="Buscar por nombre o DNI">
+			<div id="historial"></div>
+		</section>
+	</section>
+
+	<section class="vista" id="vista-cuenta" hidden>
+		<section class="bloque" id="menu-cuenta">
+			<h2>Cuenta</h2>
+			<p class="nota">Tocá una opción para verla o cambiarla.</p>
+			<ul class="menu-cuenta">
+				<li><button type="button" data-abrir="datos"><span class="icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/></svg></span><span><b>Datos para la factura</b><small id="resumen-datos"></small></span><i>›</i></button></li>
+				<li><button type="button" data-abrir="arca"><span class="icono"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2.5"/><path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3"/></svg></span><span><b>Conexión con ARCA</b><small id="resumen-arca"></small></span><i>›</i></button></li>
+				<li><button type="button" data-abrir="whatsapp"><span class="icono"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 1 3.3 6.2L4 19.5l1.2-3.4A7.5 7.5 0 0 1 4.5 12z"/></svg></span><span><b>Mensaje de WhatsApp</b><small id="resumen-whatsapp"></small></span><i>›</i></button></li>
+				<li><button type="button" data-abrir="clave"><span class="icono"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5"/></svg></span><span><b>Contraseña</b><small id="resumen-clave"></small></span><i>›</i></button></li>
+			</ul>
+		</section>
+		<section class="bloque panel" data-panel="datos" hidden>
+			<button type="button" class="volver-cuenta">‹ Cuenta</button>
+			<h2>Datos para la factura</h2>
+			<p class="nota">Aparecen en cada factura que emitís.</p>
+			<form id="form-datos" class="form-cuenta" novalidate>
+				<div class="campos dos">
+					<label class="campo">
+						<span>Nombre y apellido</span>
+						<input type="text" name="nombre" autocomplete="name">
+					</label>
+					<label class="campo">
+						<span>Profesión <small>(opcional)</small></span>
+						<input type="text" name="titulo" placeholder="Lic. en Psicología">
+					</label>
+					<label class="campo">
+						<span>CUIT</span>
+						<input type="text" name="cuit" inputmode="numeric" placeholder="20-12345678-9">
+					</label>
+					<label class="campo">
+						<span>Inicio de actividades</span>
+						<input type="text" name="inicio_actividades" inputmode="numeric" placeholder="dd/mm/aaaa">
+					</label>
+				</div>
+				<label class="campo ancho">
+					<span>Domicilio fiscal</span>
+					<input type="text" name="domicilio" autocomplete="street-address">
+				</label>
+				<div class="campos">
+					<label class="campo">
+						<span>Ingresos Brutos <small>(opcional)</small></span>
+						<input type="text" name="iibb" placeholder="Igual al CUIT">
+					</label>
+					<label class="campo">
+						<span>Punto de venta</span>
+						<input type="text" name="punto_venta" inputmode="numeric">
+					</label>
+					<label class="campo">
+						<span>Precio por sesión</span>
+						<span class="con-signo"><i>$</i><input type="text" name="precio_sesion" inputmode="decimal" placeholder="0"></span>
+					</label>
+				</div>
+				<label class="campo ancho">
+					<span>Concepto de la factura</span>
+					<input type="text" name="descripcion">
+				</label>
+				<p class="estado-form" role="status" hidden></p>
+				<div class="botones"><button type="submit" class="btn">Guardar datos</button></div>
+			</form>
+		</section>
+
+		<section class="bloque panel" data-panel="arca" hidden>
+			<button type="button" class="volver-cuenta">‹ Cuenta</button>
+			<h2>Conexión con ARCA</h2>
+			<p class="nota" id="arca-estado">Se hace una sola vez. Sin el certificado no se puede facturar.</p>
+
+			<ol class="pasos">
+				<li id="paso-pedido">
+					<span class="num">1</span>
+					<div>
+						<b>Descargá el pedido de certificado</b>
+						<p>Es un archivo .csr con tu nombre y CUIT. La clave privada queda guardada, cifrada, en la app.</p>
+						<div class="botones">
+							<button type="button" class="btn ghost chico" id="descargar-pedido">Descargar pedido</button>
+							<button type="button" class="enlace" id="regenerar-pedido" hidden>Generar uno nuevo</button>
+						</div>
+					</div>
+				</li>
+				<li>
+					<span class="num">2</span>
+					<div>
+						<b>Subilo en ARCA</b>
+						<p>En arca.gob.ar, con clave fiscal: <i>Administración de Certificados Digitales</i> → agregá un alias y subí el .csr. Descargá el certificado que te da. Después, en <i>Administrador de Relaciones</i>, autorizá ese alias para <i>Facturación Electrónica</i>. Creá también un punto de venta tipo <i>Web Services</i> y cargalo arriba.</p>
+					</div>
+				</li>
+				<li id="paso-certificado">
+					<span class="num">3</span>
+					<div>
+						<b>Subí acá el certificado</b>
+						<p id="certificado-estado">Todavía no hay certificado cargado.</p>
+						<label class="btn ghost chico archivo">
+							<input type="file" id="archivo-certificado" accept=".crt,.cer,.pem">
+							Elegir archivo .crt
+						</label>
+					</div>
+				</li>
+			</ol>
+			<p class="estado-form" id="estado-arca" role="status" hidden></p>
+		</section>
+
+		<section class="bloque panel" data-panel="whatsapp" hidden>
+			<button type="button" class="volver-cuenta">‹ Cuenta</button>
+			<h2>Mensaje de WhatsApp</h2>
+			<p class="nota">Se manda desde tu propio WhatsApp, gratis. Al emitir, tocás "WhatsApp" en cada paciente y se abre su chat con este mensaje listo para enviar.</p>
+			<form id="form-whatsapp" class="form-cuenta" novalidate>
+				<label class="campo ancho">
+					<span>Mensaje</span>
+					<textarea name="mensaje" rows="4"></textarea>
+				</label>
+				<p class="ayuda variables">Tocá para agregar:
+					<button type="button" data-variable="{nombre}">nombre</button>
+					<button type="button" data-variable="{periodo}">período</button>
+					<button type="button" data-variable="{importe}">importe</button>
+					<button type="button" data-variable="{enlace}">enlace a la factura</button>
+				</p>
+				<div class="vista-previa">
+					<span class="ayuda">Así le llega a un paciente:</span>
+					<p class="burbuja" id="vista-previa"></p>
+				</div>
+				<p class="estado-form" role="status" hidden></p>
+				<div class="botones"><button type="submit" class="btn">Guardar mensaje</button></div>
+			</form>
+		</section>
+
+		<section class="bloque panel" data-panel="clave" hidden>
+			<button type="button" class="volver-cuenta">‹ Cuenta</button>
+			<h2>Contraseña</h2>
+			<p class="nota" id="usuario-actual"></p>
+			<form id="form-clave" class="form-cuenta" novalidate>
+				<div class="campos una">
+					<label class="campo">
+						<span>Contraseña actual</span>
+						<input type="password" name="actual" autocomplete="current-password">
+					</label>
+					<label class="campo">
+						<span>Nueva</span>
+						<input type="password" name="nueva" autocomplete="new-password">
+					</label>
+					<label class="campo">
+						<span>Repetila</span>
+						<input type="password" name="repetida" autocomplete="new-password">
+					</label>
+				</div>
+				<p class="estado-form" role="status" hidden></p>
+				<div class="botones"><button type="submit" class="btn">Cambiar contraseña</button></div>
+			</form>
+		</section>
+	</section>
+
+</main>
+
+<footer class="legal">
+	<p>Las facturas se emiten como Factura C a consumidor final, con autorización de ARCA.</p>
+	<p>© <span class="anio">2026</span> Thiago Fernando Baez. Todos los derechos reservados.</p>
+	<p class="enlaces-legales"><a href="/terminos">Términos y condiciones</a><span aria-hidden="true">·</span><a href="/privacidad">Política de privacidad</a></p>
+</footer>
+
+
+<script src="app.js"></script>
+<script src="legal.js"></script>
+</body>
+</html>

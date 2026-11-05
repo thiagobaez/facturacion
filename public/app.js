@@ -726,11 +726,14 @@ $('#si-borrar').addEventListener('click', async () => {
 
 let cuenta = {};
 
+const formatoCuit = c => c ? `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}` : '';
+
 function aplicarCuenta(datos) {
 	cuenta = datos;
 	document.title = datos.app || 'Facturación';
 	$('#nombre-app').textContent = datos.app || 'Facturación';
-	$('#emisor').textContent = [datos.nombre, datos.titulo].filter(Boolean).join(' · ') || 'Completá tus datos en Cuenta';
+	const emisor = [datos.nombre, datos.titulo].filter(Boolean).join(' · ');
+	$('#emisor').textContent = emisor ? (datos.nombre && datos.cuit ? `${emisor} – ${formatoCuit(datos.cuit)}` : emisor) : 'Completá tus datos en Cuenta';
 	$('#usuario-top').textContent = datos.usuario;
 	simulacion = !!datos.simulacion;
 	const aviso = simulacion ? 'Simulación local para desarrollo: nada se envía a ARCA.' : '';
@@ -778,7 +781,7 @@ $$('.volver-cuenta').forEach(b => b.addEventListener('click', () => { pintarResu
 
 function pintarResumenCuenta() {
 	const c = cuenta;
-	const cuit = c.cuit ? `CUIT ${c.cuit.slice(0, 2)}-${c.cuit.slice(2, 10)}-${c.cuit.slice(10)}` : '';
+	const cuit = c.cuit ? `CUIT ${formatoCuit(c.cuit)}` : '';
 	$('#resumen-datos').textContent = c.nombre && c.cuit ? `${c.nombre} · ${cuit} · Punto de venta ${c.punto_venta}` : 'Falta completar';
 	const cert = c.arca?.certificado;
 	const dias = diasParaVencer(c);
@@ -812,7 +815,7 @@ const formClave = $('#form-clave');
 function pintarCuenta() {
 	const c = cuenta;
 	for (const campo of ['nombre', 'titulo', 'domicilio', 'iibb', 'inicio_actividades', 'descripcion']) formDatos[campo].value = c[campo] || '';
-	formDatos.cuit.value = c.cuit ? `${c.cuit.slice(0, 2)}-${c.cuit.slice(2, 10)}-${c.cuit.slice(10)}` : '';
+	formDatos.cuit.value = formatoCuit(c.cuit);
 	formDatos.punto_venta.value = c.punto_venta || 1;
 	pintarArca();
 	formWhatsApp.mensaje.value = c.mensaje_whatsapp || '';

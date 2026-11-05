@@ -338,6 +338,12 @@ export function crearApp(dep: (env: Env) => Dependencias = () => ({})) {
     return c.json({ estado: "abierto" })
   })
 
+  // La página principal pasa por el chequeo de sesión: sin sesión va directo a /login, sin mostrar la app un instante.
+  app.get("/", async (c) => {
+    const r = await c.env.ASSETS.fetch(c.req.raw)
+    return new Response(r.body, r)
+  })
+
   app.get("/facturas/:archivo", async (c) => {
     const id = Number(c.req.param("archivo").replace(/\.pdf$/, ""))
     const f = Number.isInteger(id) ? await datos.factura(c.env.DB, c.get("usuario").id, id) : null

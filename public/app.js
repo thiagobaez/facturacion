@@ -733,7 +733,7 @@ function aplicarCuenta(datos) {
 	document.title = datos.app || 'Facturación';
 	$('#nombre-app').textContent = datos.app || 'Facturación';
 	const emisor = [datos.nombre, datos.titulo].filter(Boolean).join(' · ');
-	$('#emisor').textContent = emisor ? (datos.nombre && datos.cuit ? `${emisor} – ${formatoCuit(datos.cuit)}` : emisor) : 'Completá tus datos en Cuenta';
+	$('#emisor').textContent = emisor ? (datos.nombre && datos.cuit ? `${emisor} – CUIT ${formatoCuit(datos.cuit)}` : emisor) : 'Completá tus datos en Cuenta';
 	$('#usuario-top').textContent = datos.usuario;
 	simulacion = !!datos.simulacion;
 	const aviso = simulacion ? 'Simulación local para desarrollo: nada se envía a ARCA.' : '';
